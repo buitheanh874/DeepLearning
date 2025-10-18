@@ -40,6 +40,3 @@ This project was developed by a team of passionate developers:
 5.  **Nguyễn Như Tiến Tuấn** - User Interface (UI/UX) Development.
 6.  **Phạm Quang Tùng** - Model Testing and Evaluation.
 
-## License
-
-This project is licensed under the MIT License.
