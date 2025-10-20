@@ -1,3 +1,4 @@
+from ultralytics import YOLO
 import numpy as np
 import matplotlib.pyplot as plt
 import cv2
@@ -8,10 +9,11 @@ from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping
 import os
 
-class LicensePlateDetector:
-    def __init__(self, input_shape=(224, 224, 3)):
-        self.input_shape = input_shape
-        self.model = None
+class YOLOLicensePlateDetector:
+    def __init__(self, model_size='n'):
+
+        self.model_size = model_size
+        self.model = None   
         
     def build_model(self):
         print("Building model...")
