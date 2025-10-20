@@ -23,7 +23,7 @@ class YOLOLicensePlateDetector:
         print("CREATING YOLO DATASET")
         print(f"{'='*60}")
         
-        # Tạo cấu trúc thư mục YOLO
+      
         dataset_path = Path(output_dir)
         for split in ['train', 'val']:
             (dataset_path / split / 'images').mkdir(parents=True, exist_ok=True)
@@ -32,20 +32,19 @@ class YOLOLicensePlateDetector:
         train_count = int(num_images * 0.8)
         val_count = num_images - train_count
         
-        # Generate training images
         print(f"\nGenerating {train_count} training images...")
         self._generate_images(train_count, dataset_path / 'train')
         
-        # Generate validation images
+        
         print(f"Generating {val_count} validation images...")
         self._generate_images(val_count, dataset_path / 'val')
         
-        # Tạo data.yaml
+        
         data_yaml = {
             'path': str(dataset_path.absolute()),
             'train': 'train/images',
             'val': 'val/images',
-            'nc': 1,  # number of classes
+            'nc': 1,  
             'names': ['license_plate']
         }
         
@@ -56,7 +55,76 @@ class YOLOLicensePlateDetector:
         print(f"\n✓ Dataset created at: {dataset_path}")
         print(f"✓ Config file: {yaml_path}")
         return str(yaml_path)
-    
+     def _generate_images(self, num_images, split_path):
+        """Generate synthetic car images with license plates"""
+        img_dir = split_path / 'images'
+        label_dir = split_path / 'labels'
+        
+        for i in range(num_images):
+            img = np.random.randint(60, 100, (640, 640, 3), dtype=np.uint8)
+            
+            car_x = np.random.randint(100, 200)
+            car_y = np.random.randint(150, 250)
+            car_w = np.random.randint(300, 400)
+            car_h = np.random.randint(200, 300)
+            
+            car_color = np.random.choice([
+                [180, 60, 60],   
+                [60, 60, 180],   
+                [220, 220, 220], 
+                [40, 40, 40],    
+                [160, 160, 160]  
+            ])
+            cv2.rectangle(img, (car_x, car_y), (car_x+car_w, car_y+car_h), 
+                         car_color.tolist(), -1)
+            
+            win_y = car_y + 20
+            win_h = int(car_h * 0.35)
+            cv2.rectangle(img, (car_x+40, win_y), (car_x+car_w-40, win_y+win_h),
+                         [120, 160, 200], -1)
+            
+            plate_w = np.random.randint(120, 180)
+            plate_h = int(plate_w * 0.35)
+            plate_x = car_x + (car_w - plate_w) // 2 + np.random.randint(-30, 30)
+            plate_y = car_y + car_h - plate_h - np.random.randint(10, 40)
+            
+            plate_x = max(10, min(plate_x, 630 - plate_w))
+            plate_y = max(10, min(plate_y, 630 - plate_h))
+            
+            plate_bg = np.random.choice([[245, 245, 245], [240, 240, 120]])
+            cv2.rectangle(img, (plate_x, plate_y), 
+                         (plate_x+plate_w, plate_y+plate_h), 
+                         plate_bg.tolist(), -1)
+            
+            cv2.rectangle(img, (plate_x, plate_y), 
+                         (plate_x+plate_w, plate_y+plate_h), 
+                         [0, 0, 0], 3)
+            
+            cv2.putText(img, '29A-12345', 
+                       (plate_x + 20, plate_y + plate_h - 15),
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 0), 2)
+            
+            noise = np.random.normal(0, 15, img.shape)
+            img = np.clip(img + noise, 0, 255).astype(np.uint8)
+            
+            brightness = np.random.uniform(0.7, 1.4)
+            img = np.clip(img * brightness, 0, 255).astype(np.uint8)
+            
+            
+            img_path = img_dir / f'car_{i:04d}.jpg'
+            cv2.imwrite(str(img_path), img)
+            
+            x_center = (plate_x + plate_w / 2) / 640
+            y_center = (plate_y + plate_h / 2) / 640
+            norm_w = plate_w / 640
+            norm_h = plate_h / 640
+            
+            label_path = label_dir / f'car_{i:04d}.txt'
+            with open(label_path, 'w') as f:
+                f.write(f'0 {x_center:.6f} {y_center:.6f} {norm_w:.6f} {norm_h:.6f}\n')
+            
+            if (i + 1) % 100 == 0:
+                print(f"  ✓ Generated {i + 1}/{num_images}")
     def train(self, X_train, y_train, X_val, y_val, epochs=50, batch_size=32):
         print(f"\nStarting training...")
         print(f"Training samples: {len(X_train)}")
