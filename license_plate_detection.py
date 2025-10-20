@@ -1,79 +1,61 @@
-from ultralytics import YOLO
-import numpy as np
 import matplotlib.pyplot as plt
+from ultralytics import YOLO
 import cv2
-from tensorflow.keras.applications import VGG16
-from tensorflow.keras.layers import Dense, Flatten, Dropout
-from tensorflow.keras.models import Model, load_model
-from tensorflow.keras.optimizers import Adam
-from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping
+import numpy as np
+from PIL import Image
 import os
+import yaml
+from pathlib import Path
+import shutil
 
 class YOLOLicensePlateDetector:
     def __init__(self, model_size='n'):
-
+        """
+        model_size: 'n' (nano), 's' (small), 'm' (medium), 'l' (large), 'x' (xlarge)
+        Nano là nhẹ nhất, phù hợp bắt đầu
+        """
         self.model_size = model_size
-        self.model = None   
+        self.model = None
         
-    def build_model(self):
-        print("Building model...")
+    def create_synthetic_dataset(self, num_images=500, output_dir='license_plate_dataset'):
+        """Tạo synthetic dataset với format YOLO"""
+        print(f"\n{'='*60}")
+        print("CREATING YOLO DATASET")
+        print(f"{'='*60}")
         
-        base_model = VGG16(weights='imagenet', include_top=False, input_shape=self.input_shape)
+        # Tạo cấu trúc thư mục YOLO
+        dataset_path = Path(output_dir)
+        for split in ['train', 'val']:
+            (dataset_path / split / 'images').mkdir(parents=True, exist_ok=True)
+            (dataset_path / split / 'labels').mkdir(parents=True, exist_ok=True)
         
-        for layer in base_model.layers:
-            layer.trainable = False
+        train_count = int(num_images * 0.8)
+        val_count = num_images - train_count
         
-        x = Flatten()(base_model.output)
-        x = Dense(512, activation='relu')(x)
-        x = Dropout(0.3)(x)
-        x = Dense(256, activation='relu')(x)
-        x = Dropout(0.3)(x)
-        x = Dense(128, activation='relu')(x)
-        output = Dense(4, activation='sigmoid', name='bbox_output')(x)
+        # Generate training images
+        print(f"\nGenerating {train_count} training images...")
+        self._generate_images(train_count, dataset_path / 'train')
         
-        self.model = Model(inputs=base_model.input, outputs=output)
-        self.model.compile(optimizer=Adam(learning_rate=0.001), loss='mse', metrics=['mae'])
+        # Generate validation images
+        print(f"Generating {val_count} validation images...")
+        self._generate_images(val_count, dataset_path / 'val')
         
-        print(f"Model created with {self.model.count_params():,} parameters")
-        return self.model
-    
-    def create_dataset(self, num_samples=1000):
-        print(f"Creating dataset with {num_samples} samples...")
+        # Tạo data.yaml
+        data_yaml = {
+            'path': str(dataset_path.absolute()),
+            'train': 'train/images',
+            'val': 'val/images',
+            'nc': 1,  # number of classes
+            'names': ['license_plate']
+        }
         
-        X, y = [], []
+        yaml_path = dataset_path / 'data.yaml'
+        with open(yaml_path, 'w') as f:
+            yaml.dump(data_yaml, f)
         
-        for i in range(num_samples):
-            img = np.random.randint(50, 200, self.input_shape, dtype=np.uint8)
-            
-            for _ in range(3):
-                rx = np.random.randint(0, 180)
-                ry = np.random.randint(0, 180)
-                rw = np.random.randint(20, 60)
-                rh = np.random.randint(20, 60)
-                color = np.random.randint(0, 255, 3)
-                img[ry:ry+rh, rx:rx+rw] = color
-            
-            plate_w = np.random.randint(60, 100)
-            plate_h = int(plate_w * 0.3)
-            plate_x = np.random.randint(20, 224 - plate_w - 20)
-            plate_y = np.random.randint(100, 224 - plate_h - 20)
-            
-            img[plate_y:plate_y+plate_h, plate_x:plate_x+plate_w] = [240, 240, 240]
-            
-            noise = np.random.randint(-20, 20, (plate_h, plate_w, 3))
-            img[plate_y:plate_y+plate_h, plate_x:plate_x+plate_w] += noise
-            img = np.clip(img, 0, 255)
-            
-            img_normalized = img.astype('float32') / 255.0
-            X.append(img_normalized)
-            
-            bbox = [plate_x / 224.0, plate_y / 224.0, plate_w / 224.0, plate_h / 224.0]
-            y.append(bbox)
-            
-            if (i + 1) % 200 == 0:
-                print(f"  Generated {i + 1}/{num_samples} samples")
-        
-        return np.array(X), np.array(y)
+        print(f"\n✓ Dataset created at: {dataset_path}")
+        print(f"✓ Config file: {yaml_path}")
+        return str(yaml_path)
     
     def train(self, X_train, y_train, X_val, y_val, epochs=50, batch_size=32):
         print(f"\nStarting training...")
