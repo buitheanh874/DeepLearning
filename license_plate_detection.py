@@ -169,6 +169,12 @@ class YOLOLicensePlateDetector:
         
         metrics = self.model.val()
         
+        print(f"\nResults:")
+        print(f"  mAP50:     {metrics.box.map50:.4f}")
+        print(f"  mAP50-95:  {metrics.box.map:.4f}")
+        print(f"  Precision: {metrics.box.p[0]:.4f}")
+        print(f"  Recall:    {metrics.box.r[0]:.4f}")
+        
         return metrics
     
     def predict(self, image_path, conf=0.25, save=True):
@@ -262,7 +268,11 @@ def main():
     demo_img = create_demo_image()
     detector.predict(demo_img, conf=0.25)
   
-   
+    print(f"\n{'='*60}")
+    print("TRAINING COMPLETE!")
+    print(f"{'='*60}")
+    print(f"Model saved at: runs/detect/license_plate_detector/weights/best.pt")
+    print(f"Results saved at: runs/detect/license_plate_detector/")
     print(f"mAP50: {metrics.box.map50:.4f}")
     print("="*60 + "\n")  
     return detector
