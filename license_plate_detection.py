@@ -1,7 +1,6 @@
 from ultralytics import YOLO
 import cv2
 import numpy as np
-from PIL import Image
 import os
 import yaml
 from pathlib import Path
@@ -9,20 +8,13 @@ import shutil
 
 class YOLOLicensePlateDetector:
     def __init__(self, model_size='n'):
-        """
-        model_size: 'n' (nano), 's' (small), 'm' (medium), 'l' (large), 'x' (xlarge)
-        Nano là nhẹ nhất, phù hợp bắt đầu
-        """
         self.model_size = model_size
         self.model = None
         
-    def create_synthetic_dataset(self, num_images=500, output_dir='license_plate_dataset'):
-        """Tạo synthetic dataset với format YOLO"""
-        print(f"\n{'='*60}")
-        print("CREATING YOLO DATASET")
-        print(f"{'='*60}")
+    def create_synthetic_dataset(self, num_images=300, output_dir='synthetic_dataset'):
+        """Tạo synthetic dataset"""
+        print(f"Creating synthetic dataset ({num_images} images)...")
         
-      
         dataset_path = Path(output_dir)
         for split in ['train', 'val']:
             (dataset_path / split / 'images').mkdir(parents=True, exist_ok=True)
@@ -31,20 +23,14 @@ class YOLOLicensePlateDetector:
         train_count = int(num_images * 0.8)
         val_count = num_images - train_count
         
-       
-        print(f"\nGenerating {train_count} training images...")
         self._generate_images(train_count, dataset_path / 'train')
-        
-     
-        print(f"Generating {val_count} validation images...")
         self._generate_images(val_count, dataset_path / 'val')
         
-       
         data_yaml = {
             'path': str(dataset_path.absolute()),
             'train': 'train/images',
             'val': 'val/images',
-            'nc': 1, 
+            'nc': 1,
             'names': ['license_plate']
         }
         
@@ -52,31 +38,24 @@ class YOLOLicensePlateDetector:
         with open(yaml_path, 'w') as f:
             yaml.dump(data_yaml, f)
         
-        print(f"\n✓ Dataset created at: {dataset_path}")
-        print(f"✓ Config file: {yaml_path}")
+        print(f"✓ Synthetic: {train_count} train, {val_count} val")
         return str(yaml_path)
     
     def _generate_images(self, num_images, split_path):
-        """Generate synthetic car images with license plates"""
         img_dir = split_path / 'images'
         label_dir = split_path / 'labels'
         
         for i in range(num_images):
-           
             img = np.random.randint(60, 100, (640, 640, 3), dtype=np.uint8)
             
-           
             car_x = np.random.randint(100, 200)
             car_y = np.random.randint(150, 250)
             car_w = np.random.randint(300, 400)
             car_h = np.random.randint(200, 300)
             
             car_color = np.random.choice([
-                [180, 60, 60],   
-                [60, 60, 180],   
-                [220, 220, 220],
-                [40, 40, 40],    
-                [160, 160, 160]  
+                [180, 60, 60], [60, 60, 180], [220, 220, 220],
+                [40, 40, 40], [160, 160, 160]
             ])
             cv2.rectangle(img, (car_x, car_y), (car_x+car_w, car_y+car_h), 
                          car_color.tolist(), -1)
@@ -94,17 +73,14 @@ class YOLOLicensePlateDetector:
             plate_x = max(10, min(plate_x, 630 - plate_w))
             plate_y = max(10, min(plate_y, 630 - plate_h))
             
-            
             plate_bg = np.random.choice([[245, 245, 245], [240, 240, 120]])
             cv2.rectangle(img, (plate_x, plate_y), 
                          (plate_x+plate_w, plate_y+plate_h), 
                          plate_bg.tolist(), -1)
             
-            
             cv2.rectangle(img, (plate_x, plate_y), 
                          (plate_x+plate_w, plate_y+plate_h), 
                          [0, 0, 0], 3)
-            
             
             cv2.putText(img, '29A-12345', 
                        (plate_x + 20, plate_y + plate_h - 15),
@@ -115,7 +91,6 @@ class YOLOLicensePlateDetector:
             
             brightness = np.random.uniform(0.7, 1.4)
             img = np.clip(img * brightness, 0, 255).astype(np.uint8)
-            
             
             img_path = img_dir / f'car_{i:04d}.jpg'
             cv2.imwrite(str(img_path), img)
@@ -128,23 +103,133 @@ class YOLOLicensePlateDetector:
             label_path = label_dir / f'car_{i:04d}.txt'
             with open(label_path, 'w') as f:
                 f.write(f'0 {x_center:.6f} {y_center:.6f} {norm_w:.6f} {norm_h:.6f}\n')
+    
+    def prepare_custom_images(self, images_folder):
+        """Chuẩn bị dataset từ ảnh thật của bạn"""
+        print(f"Loading custom images from: {images_folder}")
+        
+        images_path = Path(images_folder)
+        if not images_path.exists():
+            print(f"✗ Folder not found: {images_folder}")
+            return None
+        
+        image_files = list(images_path.glob('*.jpg')) + list(images_path.glob('*.png')) + list(images_path.glob('*.jpeg'))
+        
+        if not image_files:
+            print(f"✗ No images found")
+            return None
+        
+        label_files = list(images_path.glob('*.txt'))
+        
+        if not label_files:
+            return None
+        
+        output_dir = 'custom_dataset'
+        output_path = Path(output_dir)
+        
+        for split in ['train', 'val']:
+            (output_path / split / 'images').mkdir(parents=True, exist_ok=True)
+            (output_path / split / 'labels').mkdir(parents=True, exist_ok=True)
+        
+        paired_data = []
+        for img_file in image_files:
+            label_file = img_file.with_suffix('.txt')
+            if label_file.exists():
+                paired_data.append((img_file, label_file))
+        
+        if not paired_data:
+            print("✗ No valid image-label pairs")
+            return None
+        
+        import random
+        random.shuffle(paired_data)
+        split_idx = int(len(paired_data) * 0.8)
+        
+        train_data = paired_data[:split_idx]
+        val_data = paired_data[split_idx:]
+        
+        for img, lbl in train_data:
+            shutil.copy(img, output_path / 'train' / 'images' / img.name)
+            shutil.copy(lbl, output_path / 'train' / 'labels' / lbl.name)
+        
+        for img, lbl in val_data:
+            shutil.copy(img, output_path / 'val' / 'images' / img.name)
+            shutil.copy(lbl, output_path / 'val' / 'labels' / lbl.name)
+        
+        data_yaml = {
+            'path': str(output_path.absolute()),
+            'train': 'train/images',
+            'val': 'val/images',
+            'nc': 1,
+            'names': ['license_plate']
+        }
+        
+        yaml_path = output_path / 'data.yaml'
+        with open(yaml_path, 'w') as f:
+            yaml.dump(data_yaml, f)
+        
+        print(f"✓ Custom images: {len(train_data)} train, {len(val_data)} val")
+        return str(yaml_path)
+    
+    def combine_datasets(self, custom_yaml, synthetic_yaml, output_dir='final_dataset'):
+        """Kết hợp custom + synthetic"""
+        print("Combining datasets...")
+        
+        output_path = Path(output_dir)
+        for split in ['train', 'val']:
+            (output_path / split / 'images').mkdir(parents=True, exist_ok=True)
+            (output_path / split / 'labels').mkdir(parents=True, exist_ok=True)
+        
+        custom_path = Path(custom_yaml).parent
+        for split in ['train', 'val']:
+            src_img = custom_path / split / 'images'
+            src_lbl = custom_path / split / 'labels'
+            dst_img = output_path / split / 'images'
+            dst_lbl = output_path / split / 'labels'
             
-            if (i + 1) % 100 == 0:
-                print(f"  ✓ Generated {i + 1}/{num_images}")
+            if src_img.exists():
+                for f in src_img.glob('*.*'):
+                    shutil.copy(f, dst_img / f"real_{f.name}")
+                for f in src_lbl.glob('*.txt'):
+                    shutil.copy(f, dst_lbl / f"real_{f.name}")
+        
+        synthetic_path = Path(synthetic_yaml).parent
+        for split in ['train', 'val']:
+            src_img = synthetic_path / split / 'images'
+            src_lbl = synthetic_path / split / 'labels'
+            dst_img = output_path / split / 'images'
+            dst_lbl = output_path / split / 'labels'
+            
+            if src_img.exists():
+                for f in src_img.glob('*.jpg'):
+                    shutil.copy(f, dst_img / f"syn_{f.name}")
+                for f in src_lbl.glob('*.txt'):
+                    shutil.copy(f, dst_lbl / f"syn_{f.name}")
+        
+        data_yaml = {
+            'path': str(output_path.absolute()),
+            'train': 'train/images',
+            'val': 'val/images',
+            'nc': 1,
+            'names': ['license_plate']
+        }
+        
+        yaml_path = output_path / 'data.yaml'
+        with open(yaml_path, 'w') as f:
+            yaml.dump(data_yaml, f)
+        
+        train_total = len(list((output_path / 'train' / 'images').glob('*.*')))
+        val_total = len(list((output_path / 'val' / 'images').glob('*.*')))
+        
+        print(f"✓ Combined: {train_total} train, {val_total} val")
+        return str(yaml_path)
     
     def train(self, data_yaml, epochs=50, imgsz=640, batch=16):
-        """Train YOLOv8 model"""
-        print(f"\n{'='*60}")
-        print("TRAINING YOLOv8")
-        print(f"{'='*60}")
+        """Train model"""
+        print(f"Training ({epochs} epochs)...")
         
         model_name = f'yolov8{self.model_size}.pt'
-        print(f"Loading {model_name}...")
         self.model = YOLO(model_name)
-        
-        
-        print(f"\nStarting training...")
-        print(f"Epochs: {epochs} | Image size: {imgsz} | Batch: {batch}")
         
         results = self.model.train(
             data=data_yaml,
@@ -152,144 +237,89 @@ class YOLOLicensePlateDetector:
             imgsz=imgsz,
             batch=batch,
             name='license_plate_detector',
-            patience=20, 
+            patience=20,
             save=True,
             plots=True,
-            device='cpu'  
+            device='cpu',
+            verbose=False
         )
         
-        print("\n✓ Training completed!")
+        print("✓ Training completed")
         return results
     
     def validate(self):
-        """Validate trained model"""
-        print(f"\n{'='*60}")
-        print("VALIDATION")
-        print(f"{'='*60}")
-        
-        metrics = self.model.val()
+        """Validate model"""
+        metrics = self.model.val(verbose=False)
         
         print(f"\nResults:")
         print(f"  mAP50:     {metrics.box.map50:.4f}")
-        print(f"  mAP50-95:  {metrics.box.map:.4f}")
         print(f"  Precision: {metrics.box.p[0]:.4f}")
         print(f"  Recall:    {metrics.box.r[0]:.4f}")
         
         return metrics
     
     def predict(self, image_path, conf=0.25, save=True):
-        """Predict on single image"""
-        print(f"\nPredicting: {image_path}")
-        
+        """Predict"""
         results = self.model.predict(
             source=image_path,
             conf=conf,
             save=save,
-            show_labels=True,
-            show_conf=True
+            verbose=False
         )
         
         for r in results:
-            boxes = r.boxes
-            print(f"\nDetected {len(boxes)} license plate(s):")
-            for i, box in enumerate(boxes):
-                conf = box.conf[0]
-                cls = box.cls[0]
-                xyxy = box.xyxy[0]
-                print(f"  Plate {i+1}: confidence={conf:.3f}, bbox={xyxy.tolist()}")
+            if len(r.boxes) > 0:
+                print(f"Detected {len(r.boxes)} plate(s)")
         
         return results
-    
-    def predict_video(self, video_path, conf=0.25):
-        """Predict on video"""
-        print(f"\nProcessing video: {video_path}")
-        
-        results = self.model.predict(
-            source=video_path,
-            conf=conf,
-            save=True,
-            stream=True
-        )
-        
-        for r in results:
-            pass  
-        
-        print("✓ Video processing complete!")
-    
-    def export_model(self, format='onnx'):
-        """Export model to different formats"""
-        print(f"\nExporting model to {format}...")
-        self.model.export(format=format)
-        print(f"✓ Model exported!")
-
-
-def create_demo_image(output_path='demo_car.jpg'):
-    """Create demo car image for testing"""
-    print(f"\nCreating demo image: {output_path}")
-    
-    img = np.random.randint(80, 120, (640, 640, 3), dtype=np.uint8)
-    
-    cv2.rectangle(img, (150, 200), (490, 450), (60, 70, 200), -1)
-    cv2.rectangle(img, (180, 220), (460, 300), (120, 160, 220), -1)
-
-    plate_x, plate_y = 270, 400
-    plate_w, plate_h = 140, 45
-    cv2.rectangle(img, (plate_x, plate_y), 
-                 (plate_x + plate_w, plate_y + plate_h), (240, 240, 240), -1)
-    cv2.rectangle(img, (plate_x, plate_y), 
-                 (plate_x + plate_w, plate_y + plate_h), (0, 0, 0), 2)
-    cv2.putText(img, '29A-12345', (plate_x + 15, plate_y + 30),
-               cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 0), 2)
-    
-    cv2.imwrite(output_path, img)
-    print(f"✓ Demo image created: {output_path}")
-    return output_path
 
 
 def main():
-    """Main training pipeline"""
+    """Auto train with synthetic + your real images"""
     print("\n" + "="*60)
-    print("LICENSE PLATE DETECTION WITH YOLOv8")
+    print("LICENSE PLATE DETECTION - AUTO TRAINING")
     print("="*60)
     
     detector = YOLOLicensePlateDetector(model_size='n')
     
-    data_yaml = detector.create_synthetic_dataset(num_images=500)
+    print("\n[1/3] Creating synthetic dataset...")
+    synthetic_yaml = detector.create_synthetic_dataset(num_images=300)
     
-    results = detector.train(
-        data_yaml=data_yaml,
-        epochs=50,
-        imgsz=640,
-        batch=16
-    )
+    print("\n[2/3] Loading your real images...")
+    images_folder = input("Path to your images folder (default: my_images): ").strip()
+    if not images_folder:
+        images_folder = 'my_images'
+    
+    custom_yaml = detector.prepare_custom_images(images_folder)
+    
+    if custom_yaml:
+        data_yaml = detector.combine_datasets(custom_yaml, synthetic_yaml)
+    else:
+        print("\n⚠ Using synthetic only (no custom images found)")
+        data_yaml = synthetic_yaml
+    
+    print("\n[3/3] Training model...")
+    detector.train(data_yaml=data_yaml, epochs=50, batch=16)
     
     metrics = detector.validate()
     
-    demo_img = create_demo_image()
-    detector.predict(demo_img, conf=0.25)
-  
     print(f"\n{'='*60}")
-    print("TRAINING COMPLETE!")
+    print("✓ DONE")
     print(f"{'='*60}")
-    print(f"Model saved at: runs/detect/license_plate_detector/weights/best.pt")
-    print(f"Results saved at: runs/detect/license_plate_detector/")
+    print(f"Model: runs/detect/license_plate_detector/weights/best.pt")
     print(f"mAP50: {metrics.box.map50:.4f}")
-    print("="*60 + "\n")  
+    print("="*60 + "\n")
+    
     return detector
-
-
-def load_and_predict(model_path, image_path):
-    """Load trained model and predict"""
-    model = YOLO(model_path)
-    results = model.predict(image_path, conf=0.25, save=True)
-    return results
 
 
 if __name__ == "__main__":
     try:
-        detector = main()        
-        print("✓ All tasks completed successfully!")     
+        detector = main()
+        print("✓ Success!")
     except Exception as e:
         print(f"\n✗ Error: {e}")
         import traceback
         traceback.print_exc()
+
+
