@@ -172,27 +172,65 @@ class YOLOLicensePlateDetector:
         print(f"✓ Custom images: {len(train_data)} train, {len(val_data)} val")
         return str(yaml_path)
     
-    def train(self, data_yaml, epochs=50, imgsz=640, batch=16):
-        """Train model"""
-        print(f"Training ({epochs} epochs)...")
-        
+    def train_base_model(self, data_yaml, epochs=30, imgsz=640, batch=16):
+        """Train base model với synthetic data"""
+        print(f"\n{'='*60}")
+        print("PHASE 1: Training BASE MODEL with Synthetic Data")
+        print(f"{'='*60}")
+    
         model_name = f'yolov8{self.model_size}.pt'
         self.model = YOLO(model_name)
-        
+    
         results = self.model.train(
             data=data_yaml,
             epochs=epochs,
             imgsz=imgsz,
             batch=batch,
-            name='license_plate_detector',
-            patience=20,
+            name='base_model_synthetic',
+            patience=15,
             save=True,
             plots=True,
             device='cpu',
             verbose=False
         )
-        
-        print("✓ Training completed")
+    
+        # Lưu đường dẫn base model
+        self.base_model_path = 'runs/detect/base_model_synthetic/weights/best.pt'
+    
+        print("✓ Base model training completed")
+        print(f"✓ Model saved: {self.base_model_path}")
+    
+        return results
+
+    def finetune_with_real_data(self, data_yaml, epochs=30, imgsz=640, batch=16):
+        """Fine-tune với real data"""
+        print(f"\n{'='*60}")
+        print("PHASE 2: FINE-TUNING with Real Data")
+        print(f"{'='*60}")
+    
+        if self.base_model_path is None or not Path(self.base_model_path).exists():
+            print("✗ Base model not found. Training from scratch instead...")
+            self.model = YOLO(f'yolov8{self.model_size}.pt')
+        else:
+            print(f"Loading base model from: {self.base_model_path}")
+            self.model = YOLO(self.base_model_path)
+    
+        results = self.model.train(
+            data=data_yaml,
+            epochs=epochs,
+            imgsz=imgsz,
+            batch=batch,
+            name='finetuned_model_real',
+            patience=20,
+            save=True,
+            plots=True,
+            device='cpu',
+            verbose=False,
+            lr0=0.001  # ← Learning rate thấp cho fine-tuning
+        )
+    
+        print("✓ Fine-tuning completed")
+    
         return results
     
     def validate(self):
