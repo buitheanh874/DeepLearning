@@ -10,6 +10,7 @@ class YOLOLicensePlateDetector:
     def __init__(self, model_size='n'):
         self.model_size = model_size
         self.model = None
+        self.base_model_path = None
         
     def create_synthetic_dataset(self, num_images=300, output_dir='synthetic_dataset'):
         """Tạo synthetic dataset"""
@@ -104,7 +105,7 @@ class YOLOLicensePlateDetector:
             with open(label_path, 'w') as f:
                 f.write(f'0 {x_center:.6f} {y_center:.6f} {norm_w:.6f} {norm_h:.6f}\n')
     
-    def prepare_custom_images(self, images_folder):
+    def prepare_real_dataset(self, images_folder):
         """Chuẩn bị dataset từ ảnh thật của bạn"""
         print(f"Loading custom images from: {images_folder}")
         
@@ -124,7 +125,7 @@ class YOLOLicensePlateDetector:
         if not label_files:
             return None
         
-        output_dir = 'custom_dataset'
+        output_dir = 'real_dataset'
         output_path = Path(output_dir)
         
         for split in ['train', 'val']:
