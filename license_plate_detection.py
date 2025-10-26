@@ -172,59 +172,6 @@ class YOLOLicensePlateDetector:
         print(f"✓ Custom images: {len(train_data)} train, {len(val_data)} val")
         return str(yaml_path)
     
-    def combine_datasets(self, custom_yaml, synthetic_yaml, output_dir='final_dataset'):
-        """Kết hợp custom + synthetic"""
-        print("Combining datasets...")
-        
-        output_path = Path(output_dir)
-        for split in ['train', 'val']:
-            (output_path / split / 'images').mkdir(parents=True, exist_ok=True)
-            (output_path / split / 'labels').mkdir(parents=True, exist_ok=True)
-        
-        custom_path = Path(custom_yaml).parent
-        for split in ['train', 'val']:
-            src_img = custom_path / split / 'images'
-            src_lbl = custom_path / split / 'labels'
-            dst_img = output_path / split / 'images'
-            dst_lbl = output_path / split / 'labels'
-            
-            if src_img.exists():
-                for f in src_img.glob('*.*'):
-                    shutil.copy(f, dst_img / f"real_{f.name}")
-                for f in src_lbl.glob('*.txt'):
-                    shutil.copy(f, dst_lbl / f"real_{f.name}")
-        
-        synthetic_path = Path(synthetic_yaml).parent
-        for split in ['train', 'val']:
-            src_img = synthetic_path / split / 'images'
-            src_lbl = synthetic_path / split / 'labels'
-            dst_img = output_path / split / 'images'
-            dst_lbl = output_path / split / 'labels'
-            
-            if src_img.exists():
-                for f in src_img.glob('*.jpg'):
-                    shutil.copy(f, dst_img / f"syn_{f.name}")
-                for f in src_lbl.glob('*.txt'):
-                    shutil.copy(f, dst_lbl / f"syn_{f.name}")
-        
-        data_yaml = {
-            'path': str(output_path.absolute()),
-            'train': 'train/images',
-            'val': 'val/images',
-            'nc': 1,
-            'names': ['license_plate']
-        }
-        
-        yaml_path = output_path / 'data.yaml'
-        with open(yaml_path, 'w') as f:
-            yaml.dump(data_yaml, f)
-        
-        train_total = len(list((output_path / 'train' / 'images').glob('*.*')))
-        val_total = len(list((output_path / 'val' / 'images').glob('*.*')))
-        
-        print(f"✓ Combined: {train_total} train, {val_total} val")
-        return str(yaml_path)
-    
     def train(self, data_yaml, epochs=50, imgsz=640, batch=16):
         """Train model"""
         print(f"Training ({epochs} epochs)...")
