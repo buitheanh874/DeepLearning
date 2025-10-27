@@ -235,28 +235,37 @@ class YOLOLicensePlateDetector:
     
     def validate(self):
         """Validate model"""
+        print("\n" + "="*60)
+        print("VALIDATION RESULTS")
+        print("="*60)
+    
         metrics = self.model.val(verbose=False)
-        
-        print(f"\nResults:")
-        print(f"  mAP50:     {metrics.box.map50:.4f}")
-        print(f"  Precision: {metrics.box.p[0]:.4f}")
-        print(f"  Recall:    {metrics.box.r[0]:.4f}")
-        
+    
+        print(f"mAP50:     {metrics.box.map50:.4f}")
+        print(f"mAP50-95:  {metrics.box.map:.4f}")
+        print(f"Precision: {metrics.box.p[0]:.4f}")
+        print(f"Recall:    {metrics.box.r[0]:.4f}")
+        print("="*60)
+    
         return metrics
     
     def predict(self, image_path, conf=0.25, save=True):
-        """Predict"""
+        """Predict on new images"""
+        print(f"\nPredicting on: {image_path}")
+    
         results = self.model.predict(
             source=image_path,
             conf=conf,
             save=save,
             verbose=False
         )
-        
+    
         for r in results:
             if len(r.boxes) > 0:
-                print(f"Detected {len(r.boxes)} plate(s)")
-        
+                print(f"✓ Detected {len(r.boxes)} license plate(s)")
+            else:
+                print("✗ No license plates detected")
+    
         return results
 
 
