@@ -337,7 +337,16 @@ def main():
 if __name__ == "__main__":
     try:
         detector = main()
-        print("✓ Success!")
+        
+        # Test prediction (optional)
+        print("\n" + "="*70)
+        test_image = input("Test on an image? (Enter path or press Enter to skip): ").strip()
+        if test_image and Path(test_image).exists():
+            detector.predict(test_image, conf=0.3, save=True)
+            print("✓ Results saved in runs/detect/predict/")
+        
+        print("\n✓ All done! Check the 'runs/detect/' folder for results.")
+        
     except Exception as e:
         print(f"\n✗ Error: {e}")
         import traceback
