@@ -268,7 +268,6 @@ class YOLOLicensePlateDetector:
     
         return results
 
-
 def main():
     """Auto train with synthetic + your real images"""
     print("\n" + "="*60)
