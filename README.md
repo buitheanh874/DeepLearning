@@ -2,7 +2,7 @@
 
 ## Introduction
 
-This project is a system capable of automatically recognizing and extracting information from vehicle license plates in images or videos. The system utilizes image processing and deep learning techniques to achieve high accuracy under various environmental conditions.
+This project is a system capable of automatically recognizing from vehicle license plates in images. The system utilizes image processing and deep learning techniques to achieve high accuracy under various environmental conditions.
 
 ## Technologies Used
 
