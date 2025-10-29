@@ -269,40 +269,67 @@ class YOLOLicensePlateDetector:
         return results
 
 def main():
-    """Auto train with synthetic + your real images"""
-    print("\n" + "="*60)
-    print("LICENSE PLATE DETECTION - AUTO TRAINING")
-    print("="*60)
+    """Auto train pipeline: Synthetic → Fine-tune with Real"""
+    print("\n" + "="*70)
+    print("LICENSE PLATE DETECTION - TWO-STAGE TRAINING PIPELINE")
+    print("="*70)
+    print("Stage 1: Train base model with synthetic data")
+    print("Stage 2: Fine-tune with your real images")
+    print("="*70)
     
     detector = YOLOLicensePlateDetector(model_size='n')
     
-    print("\n[1/3] Creating synthetic dataset...")
+    # ==================== STAGE 1: SYNTHETIC DATA ====================
+    print("\n[STAGE 1] Creating synthetic dataset...")
     synthetic_yaml = detector.create_synthetic_dataset(num_images=300)
     
-    print("\n[2/3] Loading your real images...")
-    images_folder = input("Path to your images folder (default: my_images): ").strip()
+    print("\n[STAGE 1] Training base model with synthetic data...")
+    detector.train_base_model(
+        data_yaml=synthetic_yaml,
+        epochs=30,  # Giảm epochs cho base model
+        batch=16
+    )
+    
+    print("\n[STAGE 1] Validating base model...")
+    metrics_base = detector.validate()
+    
+    # ==================== STAGE 2: REAL DATA FINE-TUNING ====================
+    print("\n[STAGE 2] Looking for real images...")
+    images_folder = input("\nPath to your real images folder (default: my_images): ").strip()
     if not images_folder:
         images_folder = 'my_images'
     
-    custom_yaml = detector.prepare_custom_images(images_folder)
+    real_yaml = detector.prepare_real_dataset(images_folder)
     
-    if custom_yaml:
-        data_yaml = detector.combine_datasets(custom_yaml, synthetic_yaml)
+    if real_yaml:
+        print("\n[STAGE 2] Fine-tuning with real data...")
+        detector.finetune_with_real_data(
+            data_yaml=real_yaml,
+            epochs=30,  # Thêm epochs cho fine-tuning
+            batch=16
+        )
+        
+        print("\n[STAGE 2] Validating fine-tuned model...")
+        metrics_final = detector.validate()
+        
+        print(f"\n{'='*70}")
+        print("✓ TWO-STAGE TRAINING COMPLETED")
+        print(f"{'='*70}")
+        print(f"Base Model (Synthetic):   mAP50 = {metrics_base.box.map50:.4f}")
+        print(f"Final Model (Fine-tuned): mAP50 = {metrics_final.box.map50:.4f}")
+        print(f"\nFinal model saved at:")
+        print(f"  runs/detect/finetuned_model_real/weights/best.pt")
+        print("="*70 + "\n")
+        
     else:
-        print("\n⚠ Using synthetic only (no custom images found)")
-        data_yaml = synthetic_yaml
-    
-    print("\n[3/3] Training model...")
-    detector.train(data_yaml=data_yaml, epochs=50, batch=16)
-    
-    metrics = detector.validate()
-    
-    print(f"\n{'='*60}")
-    print("✓ DONE")
-    print(f"{'='*60}")
-    print(f"Model: runs/detect/license_plate_detector/weights/best.pt")
-    print(f"mAP50: {metrics.box.map50:.4f}")
-    print("="*60 + "\n")
+        print("\n⚠ No real images found. Using base model only.")
+        print(f"\n{'='*70}")
+        print("✓ BASE MODEL TRAINING COMPLETED")
+        print(f"{'='*70}")
+        print(f"Base Model (Synthetic): mAP50 = {metrics_base.box.map50:.4f}")
+        print(f"\nModel saved at:")
+        print(f"  runs/detect/base_model_synthetic/weights/best.pt")
+        print("="*70 + "\n")
     
     return detector
 
