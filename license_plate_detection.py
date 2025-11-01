@@ -244,7 +244,21 @@ class YOLOLicensePlateDetector:
             save=True,
             plots=True,
             device='cpu',
-            verbose=False
+            verbose=False,
+            # Data Augmentation
+            hsv_h=0.015,      # Hue augmentation
+            hsv_s=0.7,        # Saturation augmentation
+            hsv_v=0.4,        # Value augmentation
+            degrees=10.0,     # Rotate ±10 degrees
+            translate=0.1,    # Translate ±10%
+            scale=0.5,        # Scale ±50%
+            shear=0.0,        # Shear ±0 degrees
+            perspective=0.0,  # Perspective
+            flipud=0.0,       # Flip up-down (0% - không lật biển số)
+            fliplr=0.5,       # Flip left-right (50% - biển số vẫn đọc được)
+            mosaic=1.0,       # Mosaic augmentation (100%)
+            mixup=0.1,        # Mixup augmentation (10%)
+            copy_paste=0.0    # Copy-paste augmentation
         )
         
         return results
@@ -317,4 +331,3 @@ if __name__ == "__main__":
             print("Done")
     except Exception as e:
         print(f"Error: {e}")
-
