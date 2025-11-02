@@ -33,11 +33,16 @@ AI model to detect license plates in images using YOLOv8.( just detect license p
 
     ```
 
-**structure:**
-  ```
-   my_images/
-      car1.jpg
-      car1.txt  ← the position of the box for labeling 
+``` DeepLearning/ ├── license_plate_detection.py
+      requirements.txt
+      my_images/ 
+      car1.jpg 
+      car1.txt ->> the position with yolo form tell where the label is
+      car2.jpg 
+
+
+
+
 
 ## Features
 
