@@ -1,8 +1,7 @@
-# License Plate Recognition System
+# License Plate Detection
 
-## Introduction
+AI model to detect license plates in images using YOLOv8.( just detect license plates!! not reading or doing  sth else)
 
-This project is a system capable of automatically recognizing from vehicle license plates in images. The system utilizes image processing and deep learning techniques to achieve high accuracy under various environmental conditions.
 
 ## Technologies Used
 
@@ -13,30 +12,38 @@ This project is a system capable of automatically recognizing from vehicle licen
 
 ## Installation and Usage
 
-1.  **Clone the repository:**
+**Clone the repository:**
     ```bash
     git clone https://github.com/buitheanh874/DeepLearning
     cd license-plate-recognition
     ```
-
-2.  **Install the required libraries:**
+**Prepare Images**
+- Create folder `my_images/`
+- Add car images (50-200 photos) -> at least 50 real photos for better performence!!
+**Install the required libraries:**
     ```bash
     pip install -r requirements.txt
     ```
 
-3.  **Run detection on an image:**
+ **Run detection on an image:**
     ```bash
-    python detect.py --image image_file.jpg
+   python license_plate_detection.py
+```
+   Enter: `my_images` → Wait for a super long time ( my cheap pc with i3-8100 CPU 16gb ram took about like 1-1,5 hours)
+
     ```
 
-## Team Members
+**structure:**
+  ```
+   my_images/
+      car1.jpg
+      car1.txt  ← the position of the box for labeling 
 
-This project was developed by a team of passionate developers:
+## Features
 
-1.  **Bùi Thế Anh** - Team Leader, System Architect.
-2.  **Lê Đức An** - Character Recognition Model (OCR).
-3.  **Đỗ Gia Bảo** - License Plate Detection Model (YOLO).
-4.  **Trần Hiến Chương** - Data Collection and Preprocessing.
-5.  **Nguyễn Như Tiến Tuấn** - User Interface (UI/UX) Development.
-6.  **Phạm Quang Tùng** - Model Testing and Evaluation.
+- Synthetic data generation (300 images)
+- Data augmentation (rotation, flip, color)
+- Real + synthetic training
+- Easy to use
+
 
