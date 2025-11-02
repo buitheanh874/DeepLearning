@@ -476,19 +476,19 @@ if __name__ == "__main__":
             device='cpu',
             verbose=False,
             # Data Augmentation
-            hsv_h=0.015,      # Hue augmentation
-            hsv_s=0.7,        # Saturation augmentation
-            hsv_v=0.4,        # Value augmentation
-            degrees=10.0,     # Rotate ±10 degrees
-            translate=0.1,    # Translate ±10%
-            scale=0.5,        # Scale ±50%
-            shear=0.0,        # Shear ±0 degrees
-            perspective=0.0,  # Perspective
-            flipud=0.0,       # Flip up-down (0% - không lật biển số)
-            fliplr=0.5,       # Flip left-right (50% - biển số vẫn đọc được)
-            mosaic=1.0,       # Mosaic augmentation (100%)
-            mixup=0.1,        # Mixup augmentation (10%)
-            copy_paste=0.0    # Copy-paste augmentation
+            hsv_h=0.015,     
+            hsv_s=0.7,       
+            hsv_v=0.4,       
+            degrees=10.0,    
+            translate=0.1,   
+            scale=0.5,        
+            shear=0.0,       
+            perspective=0.0,
+            flipud=0.0,      
+            fliplr=0.5,      
+            mosaic=1.0,     
+            mixup=0.1,       
+            copy_paste=0.0    
         )
         
         return results
@@ -527,27 +527,6 @@ def main():
     
     print(f"\nModel saved: runs/detect/license_plate_detector/weights/best.pt")
     return detector
-
-
-def auto_label_new_images():
-    model_path = input("Model path (default: runs/detect/license_plate_detector/weights/best.pt): ").strip()
-    if not model_path:
-        model_path = 'runs/detect/license_plate_detector/weights/best.pt'
-    
-    if not Path(model_path).exists():
-        print("Model not found")
-        return
-    
-    detector = YOLOLicensePlateDetector()
-    detector.load_model(model_path)
-    
-    images_folder = input("New images folder: ").strip()
-    if not images_folder:
-        return
-    
-    output_folder = detector.auto_label_images(images_folder, output_folder='auto_labeled')
-    if output_folder:
-        print(f"Labels saved to: {output_folder}")
 
 
 if __name__ == "__main__":
