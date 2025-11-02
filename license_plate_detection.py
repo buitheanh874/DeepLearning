@@ -5,7 +5,7 @@ import os
 import yaml
 from pathlib import Path
 import shutil
-import random  # Đã thêm import này vì nó được sử dụng bên dưới
+import random 
 
 class YOLOLicensePlateDetector:
     def __init__(self, model_size='n'):
