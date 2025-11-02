@@ -207,7 +207,7 @@ class YOLOLicensePlateDetector:
             patience=20,
             save=True,
             plots=True,
-            device='cpu',
+            device=0,
             verbose=False,
             # Data Augmentation
             hsv_h=0.015,
