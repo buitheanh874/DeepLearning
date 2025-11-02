@@ -17,7 +17,7 @@ cd license-plate-recognition
 
 **Prepare Images**
 - Create folder `my_images/`
-- Add car,motorbike,... images (50-200 photos) -> at least 50 real photos for better performence!!
+- Add car,motorbike,... images (at least 50 real photos for better performence)
 
  ->> HOW TO label images by your self : -> go:https://www.makesense.ai/ -> put image in -> create label and name it = license_plate
                                                                         -> draw a box around the license plate -> extract -> copy all of the them into my_images
