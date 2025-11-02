@@ -17,7 +17,7 @@ cd license-plate-recognition
 
 **Prepare Images**
 - Create folder `my_images/`
-- Add car images (50-200 photos) -> at least 50 real photos for better performence!!
+- Add car or bicycle images (50-200 photos) -> at least 50 real photos for better performence!!
 
  ->> HOW TO label images by your self : -> go:https://www.makesense.ai/ -> put image in -> create label and name it = license_plate
                                                                         -> draw a box around the license plate -> extract -> copy all of the them into my_images
@@ -41,7 +41,7 @@ DeepLearning/
 └── my_images/
     ├── car1.jpg
     ├── car1.txt  (the position with yolo form tell where the label is)
-    └── car2.jpg
+    └── bike1.jpg
 ```
 
 ## Features
