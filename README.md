@@ -19,6 +19,9 @@ cd license-plate-recognition
 - Create folder `my_images/`
 - Add car images (50-200 photos) -> at least 50 real photos for better performence!!
 
+- ->> HOW TO label images by your self : -> go:https://www.makesense.ai/ -> put image in -> create label and name it = detect_plate
+-                                                                        -> draw a box around the license plate -> extract -> copy all of the them into my_images
+
 **Install the required libraries:**
 ```bash
 pip install -r requirements.txt
