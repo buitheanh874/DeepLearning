@@ -4,7 +4,7 @@ AI model to detect license plates in images using YOLOv8.( just detect license p
 ## Technologies Used
 -   **Programming Language:** Python
 -   **Image Processing Library:** OpenCV
--   **Deep Learning Library:** TensorFlow / Keras
+-   **Deep Learning Library:** PyTorch, Ultralytics
 -   **Algorithms:** YOLOv8, CNN
 
 ## Installation and Usage
