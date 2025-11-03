@@ -1,341 +1,352 @@
-import numpy as np
-import matplotlib.pyplot as plt
+from ultralytics import YOLO
 import cv2
-from tensorflow.keras.applications import VGG16
-from tensorflow.keras.layers import Dense, Flatten, Dropout
-from tensorflow.keras.models import Model, load_model
-from tensorflow.keras.optimizers import Adam
-from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping
+import numpy as np
 import os
+import yaml
+from pathlib import Path
+import shutil
+import random  
 
-class LicensePlateDetector:
-    def __init__(self, input_shape=(224, 224, 3)):
-        self.input_shape = input_shape
+class YOLOLicensePlateDetector:
+    def __init__(self, model_size='n'):
+        self.model_size = model_size
         self.model = None
         
-    def build_model(self):
-        print("Building model...")
+    def create_synthetic_dataset(self, num_images=300, output_dir='synthetic_dataset'):
+        dataset_path = Path(output_dir)
+        for split in ['train', 'val']:
+            (dataset_path / split / 'images').mkdir(parents=True, exist_ok=True)
+            (dataset_path / split / 'labels').mkdir(parents=True, exist_ok=True)
         
-        base_model = VGG16(weights='imagenet', include_top=False, input_shape=self.input_shape)
+        train_count = int(num_images * 0.8)
+        val_count = num_images - train_count
         
-        for layer in base_model.layers:
-            layer.trainable = False
+        self._generate_images(train_count, dataset_path / 'train')
+        self._generate_images(val_count, dataset_path / 'val')
         
-        x = Flatten()(base_model.output)
-        x = Dense(512, activation='relu')(x)
-        x = Dropout(0.3)(x)
-        x = Dense(256, activation='relu')(x)
-        x = Dropout(0.3)(x)
-        x = Dense(128, activation='relu')(x)
-        output = Dense(4, activation='sigmoid', name='bbox_output')(x)
+        data_yaml = {
+            'path': str(dataset_path.absolute()),
+            'train': 'train/images',
+            'val': 'val/images',
+            'nc': 1,
+            'names': ['license_plate']
+        }
         
-        self.model = Model(inputs=base_model.input, outputs=output)
-        self.model.compile(optimizer=Adam(learning_rate=0.001), loss='mse', metrics=['mae'])
+        yaml_path = dataset_path / 'data.yaml'
+        with open(yaml_path, 'w') as f:
+            yaml.dump(data_yaml, f)
         
-        print(f"Model created with {self.model.count_params():,} parameters")
-        return self.model
+        return str(yaml_path)
     
-    def create_dataset(self, num_samples=1000):
-        print(f"Creating dataset with {num_samples} samples...")
+    def _generate_images(self, num_images, split_path):
+        img_dir = split_path / 'images'
+        label_dir = split_path / 'labels'
         
-        X, y = [], []
-        
-        for i in range(num_samples):
-            img = np.random.randint(50, 200, self.input_shape, dtype=np.uint8)
+        for i in range(num_images):
+            img = np.random.randint(60, 100, (640, 640, 3), dtype=np.uint8)
             
-            for _ in range(3):
-                rx = np.random.randint(0, 180)
-                ry = np.random.randint(0, 180)
-                rw = np.random.randint(20, 60)
-                rh = np.random.randint(20, 60)
-                color = np.random.randint(0, 255, 3)
-                img[ry:ry+rh, rx:rx+rw] = color
+            car_x = np.random.randint(100, 200)
+            car_y = np.random.randint(150, 250)
+            car_w = np.random.randint(300, 400)
+            car_h = np.random.randint(200, 300)
             
-            plate_w = np.random.randint(60, 100)
-            plate_h = int(plate_w * 0.3)
-            plate_x = np.random.randint(20, 224 - plate_w - 20)
-            plate_y = np.random.randint(100, 224 - plate_h - 20)
+            car_colors = [[180, 60, 60], [60, 60, 180], [220, 220, 220], [40, 40, 40], [160, 160, 160]]
+            car_color = car_colors[np.random.randint(0, len(car_colors))]
             
-            img[plate_y:plate_y+plate_h, plate_x:plate_x+plate_w] = [240, 240, 240]
+            cv2.rectangle(img, (car_x, car_y), (car_x+car_w, car_y+car_h), car_color, -1)
             
-            noise = np.random.randint(-20, 20, (plate_h, plate_w, 3))
-            img[plate_y:plate_y+plate_h, plate_x:plate_x+plate_w] += noise
-            img = np.clip(img, 0, 255)
+            win_y = car_y + 20
+            win_h = int(car_h * 0.35)
+            cv2.rectangle(img, (car_x+40, win_y), (car_x+car_w-40, win_y+win_h), [120, 160, 200], -1)
             
-            img_normalized = img.astype('float32') / 255.0
-            X.append(img_normalized)
+            plate_w = np.random.randint(120, 180)
+            plate_h = int(plate_w * 0.35)
+            plate_x = car_x + (car_w - plate_w) // 2 + np.random.randint(-30, 30)
+            plate_y = car_y + car_h - plate_h - np.random.randint(10, 40)
             
-            bbox = [plate_x / 224.0, plate_y / 224.0, plate_w / 224.0, plate_h / 224.0]
-            y.append(bbox)
+            plate_x = max(10, min(plate_x, 630 - plate_w))
+            plate_y = max(10, min(plate_y, 630 - plate_h))
             
-            if (i + 1) % 200 == 0:
-                print(f"  Generated {i + 1}/{num_samples} samples")
-        
-        return np.array(X), np.array(y)
+            plate_bg = [[245, 245, 245], [240, 240, 120]][np.random.randint(0, 2)]
+            
+            cv2.rectangle(img, (plate_x, plate_y), (plate_x+plate_w, plate_y+plate_h), plate_bg, -1)
+            cv2.rectangle(img, (plate_x, plate_y), (plate_x+plate_w, plate_y+plate_h), [0, 0, 0], 3)
+            
+            cv2.putText(img, '29A-12345', (plate_x + 20, plate_y + plate_h - 15),
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 0), 2)
+            
+            noise = np.random.normal(0, 15, img.shape)
+            img = np.clip(img + noise, 0, 255).astype(np.uint8)
+            
+            brightness = np.random.uniform(0.7, 1.4)
+            img = np.clip(img * brightness, 0, 255).astype(np.uint8)
+            
+            cv2.imwrite(str(img_dir / f'car_{i:04d}.jpg'), img)
+            
+            x_center = (plate_x + plate_w / 2) / 640
+            y_center = (plate_y + plate_h / 2) / 640
+            norm_w = plate_w / 640
+            norm_h = plate_h / 640
+            
+            with open(label_dir / f'car_{i:04d}.txt', 'w') as f:
+                f.write(f'0 {x_center:.6f} {y_center:.6f} {norm_w:.6f} {norm_h:.6f}\n')
     
-    def train(self, X_train, y_train, X_val, y_val, epochs=50, batch_size=32):
-        print(f"\nStarting training...")
-        print(f"Training samples: {len(X_train)}")
-        print(f"Validation samples: {len(X_val)}")
-        print(f"Epochs: {epochs}, Batch size: {batch_size}")
+    def prepare_custom_images(self, images_folder):
+        images_path = Path(images_folder)
+        if not images_path.exists():
+            return None
         
-        os.makedirs('models', exist_ok=True)
+        image_files = list(images_path.glob('*.jpg')) + list(images_path.glob('*.png')) + list(images_path.glob('*.jpeg'))
+        if not image_files:
+            return None
         
-        callbacks = [
-            ModelCheckpoint('models/best_model.h5', monitor='val_loss', 
-                          save_best_only=True, verbose=1),
-            EarlyStopping(monitor='val_loss', patience=10, 
-                         restore_best_weights=True, verbose=1)
-        ]
+        label_files = list(images_path.glob('*.txt'))
+        if not label_files:
+            return None
         
-        history = self.model.fit(
-            X_train, y_train,
-            validation_data=(X_val, y_val),
+        output_dir = 'custom_dataset'
+        output_path = Path(output_dir)
+        
+        for split in ['train', 'val']:
+            (output_path / split / 'images').mkdir(parents=True, exist_ok=True)
+            (output_path / split / 'labels').mkdir(parents=True, exist_ok=True)
+        
+        paired_data = []
+        for img_file in image_files:
+            label_file = img_file.with_suffix('.txt')
+            if label_file.exists():
+                paired_data.append((img_file, label_file))
+        
+        if not paired_data:
+            return None
+        
+        random.shuffle(paired_data)
+        split_idx = int(len(paired_data) * 0.8)
+        
+        train_data = paired_data[:split_idx]
+        val_data = paired_data[split_idx:]
+        
+        for img, lbl in train_data:
+            shutil.copy(img, output_path / 'train' / 'images' / img.name)
+            shutil.copy(lbl, output_path / 'train' / 'labels' / lbl.name)
+        
+        for img, lbl in val_data:
+            shutil.copy(img, output_path / 'val' / 'images' / img.name)
+            shutil.copy(lbl, output_path / 'val' / 'labels' / lbl.name)
+        
+        data_yaml = {
+            'path': str(output_path.absolute()),
+            'train': 'train/images',
+            'val': 'val/images',
+            'nc': 1,
+            'names': ['license_plate']
+        }
+        
+        yaml_path = output_path / 'data.yaml'
+        with open(yaml_path, 'w') as f:
+            yaml.dump(data_yaml, f)
+        
+        return str(yaml_path)
+    
+    def combine_datasets(self, custom_yaml, synthetic_yaml, output_dir='final_dataset'):
+        output_path = Path(output_dir)
+        for split in ['train', 'val']:
+            (output_path / split / 'images').mkdir(parents=True, exist_ok=True)
+            (output_path / split / 'labels').mkdir(parents=True, exist_ok=True)
+        
+        custom_path = Path(custom_yaml).parent
+        for split in ['train', 'val']:
+            src_img = custom_path / split / 'images'
+            src_lbl = custom_path / split / 'labels'
+            dst_img = output_path / split / 'images'
+            dst_lbl = output_path / split / 'labels'
+            
+            if src_img.exists():
+                for f in src_img.glob('*.*'):
+                    shutil.copy(f, dst_img / f"real_{f.name}")
+                for f in src_lbl.glob('*.txt'):
+                    shutil.copy(f, dst_lbl / f"real_{f.name}")
+        
+        synthetic_path = Path(synthetic_yaml).parent
+        for split in ['train', 'val']:
+            src_img = synthetic_path / split / 'images'
+            src_lbl = synthetic_path / split / 'labels'
+            dst_img = output_path / split / 'images'
+            dst_lbl = output_path / split / 'labels'
+            
+            if src_img.exists():
+                for f in src_img.glob('*.jpg'):
+                    shutil.copy(f, dst_img / f"syn_{f.name}")
+                for f in src_lbl.glob('*.txt'):
+                    shutil.copy(f, dst_lbl / f"syn_{f.name}")
+        
+        data_yaml = {
+            'path': str(output_path.absolute()),
+            'train': 'train/images',
+            'val': 'val/images',
+            'nc': 1,
+            'names': ['license_plate']
+        }
+        
+        yaml_path = output_path / 'data.yaml'
+        with open(yaml_path, 'w') as f:
+            yaml.dump(data_yaml, f)
+        
+        return str(yaml_path)
+    
+    def train(self, data_yaml, epochs=50, imgsz=640, batch=16):
+        model_name = f'yolov8{self.model_size}.pt'
+        self.model = YOLO(model_name)
+        
+        results = self.model.train(
+            data=data_yaml,
             epochs=epochs,
-            batch_size=batch_size,
-            callbacks=callbacks,
-            verbose=1
+            imgsz=imgsz,
+            batch=batch,
+            name='license_plate_detector',
+            patience=20,
+            save=True,
+            plots=True,
+            device=0,
+            verbose=False,
+            hsv_h=0.015,
+            hsv_s=0.7,
+            hsv_v=0.4,
+            degrees=10.0,
+            translate=0.1,
+            scale=0.5,
+            shear=0.0,
+            perspective=0.0,
+            flipud=0.0,
+            fliplr=0.5,
+            mosaic=1.0,
+            mixup=0.1,
+            copy_paste=0.0
         )
         
-        print("Training completed!")
-        return history
+        return results
     
-    def plot_history(self, history):
-        fig, axes = plt.subplots(1, 2, figsize=(15, 5))
+    def validate(self):
+        metrics = self.model.val(verbose=False)
+        print(f"\nmAP50: {metrics.box.map50:.4f}")
+        return metrics
+     
+    def visualize_results(self, test_images_folder='my_images', num_samples=6):
+        import matplotlib.pyplot as plt
+        images_path = Path(test_images_folder)
+        image_files = list(images_path.glob('*.jpg'))[:num_samples]
         
-        axes[0].plot(history.history['loss'], label='Train Loss', linewidth=2)
-        axes[0].plot(history.history['val_loss'], label='Val Loss', linewidth=2)
-        axes[0].set_xlabel('Epoch', fontsize=12)
-        axes[0].set_ylabel('Loss (MSE)', fontsize=12)
-        axes[0].set_title('Training and Validation Loss', fontsize=14, fontweight='bold')
-        axes[0].legend()
-        axes[0].grid(True, alpha=0.3)
+        if not image_files:
+            print("No images found for visualization")
+            return
         
-        axes[1].plot(history.history['mae'], label='Train MAE', linewidth=2)
-        axes[1].plot(history.history['val_mae'], label='Val MAE', linewidth=2)
-        axes[1].set_xlabel('Epoch', fontsize=12)
-        axes[1].set_ylabel('MAE', fontsize=12)
-        axes[1].set_title('Training and Validation MAE', fontsize=14, fontweight='bold')
-        axes[1].legend()
-        axes[1].grid(True, alpha=0.3)
+        fig, axes = plt.subplots(2, 3, figsize=(15, 10))
+        axes = axes.flatten()
+        
+        for idx, img_file in enumerate(image_files):
+            results = self.model.predict(str(img_file), conf=0.25, verbose=False)
+            
+            img = cv2.imread(str(img_file))
+            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+            
+            for r in results:
+                boxes = r.boxes
+                for box in boxes:
+                    x1, y1, x2, y2 = map(int, box.xyxy[0].tolist())
+                    conf = box.conf[0].item()
+                    
+                    cv2.rectangle(img, (x1, y1), (x2, y2), (0, 255, 0), 2)
+                    cv2.putText(img, f'{conf:.2f}', (x1, y1-10),
+                               cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+            
+            axes[idx].imshow(img)
+            axes[idx].set_title(f'{img_file.name}', fontsize=10)
+            axes[idx].axis('off')
         
         plt.tight_layout()
-        plt.savefig('training_history.png', dpi=150, bbox_inches='tight')
-        print("Training history saved as 'training_history.png'")
+        plt.savefig('prediction_results.png', dpi=150, bbox_inches='tight')
+        print("Saved: prediction_results.png")
         plt.show()
     
-    def save_model(self, filepath='models/final_model.h5'):
-        self.model.save(filepath)
-        print(f"Model saved: {filepath}")
-
-
-def calculate_iou(box1, box2):
-    x1, y1, w1, h1 = box1
-    x2, y2, w2, h2 = box2
-    
-    xi1 = max(x1, x2)
-    yi1 = max(y1, y2)
-    xi2 = min(x1 + w1, x2 + w2)
-    yi2 = min(y1 + h1, y2 + h2)
-    
-    intersection = max(0, xi2 - xi1) * max(0, yi2 - yi1)
-    union = w1 * h1 + w2 * h2 - intersection
-    
-    return intersection / union if union > 0 else 0
-
-
-def evaluate_model(model, X_test, y_test):
-    print("\nEvaluating model...")
-    
-    predictions = model.predict(X_test, verbose=0)
-    
-    ious = []
-    for pred, true in zip(predictions, y_test):
-        iou = calculate_iou(pred, true)
-        ious.append(iou)
-    
-    mean_iou = np.mean(ious)
-    print(f"Mean IoU: {mean_iou:.4f}")
-    print(f"Min IoU: {np.min(ious):.4f}")
-    print(f"Max IoU: {np.max(ious):.4f}")
-    print(f"Median IoU: {np.median(ious):.4f}")
-    
-    plt.figure(figsize=(10, 6))
-    plt.hist(ious, bins=50, edgecolor='black', alpha=0.7)
-    plt.axvline(mean_iou, color='red', linestyle='--', linewidth=2, 
-               label=f'Mean: {mean_iou:.4f}')
-    plt.xlabel('IoU Score', fontsize=12)
-    plt.ylabel('Frequency', fontsize=12)
-    plt.title('IoU Distribution on Test Set', fontsize=14, fontweight='bold')
-    plt.legend()
-    plt.grid(True, alpha=0.3)
-    plt.savefig('iou_distribution.png', dpi=150, bbox_inches='tight')
-    print("IoU distribution saved as 'iou_distribution.png'")
-    plt.show()
-    
-    return mean_iou, ious
-
-
-def visualize_predictions(model, X_test, y_test, num_samples=6):
-    print(f"\nVisualizing {num_samples} predictions...")
-    
-    predictions = model.predict(X_test[:num_samples], verbose=0)
-    
-    fig, axes = plt.subplots(2, 3, figsize=(15, 10))
-    axes = axes.flatten()
-    
-    for i in range(num_samples):
-        img = (X_test[i] * 255).astype(np.uint8).copy()
-        pred_box = predictions[i]
-        true_box = y_test[i]
+    def plot_training_curves(self):
+        import matplotlib.pyplot as plt
+        import pandas as pd
         
-        h, w = img.shape[:2]
+        results_path = Path('runs/detect/license_plate_detector/results.csv')
+        if not results_path.exists():
+            print("No training results found")
+            return
         
-        x, y, bw, bh = true_box
-        cv2.rectangle(img, (int(x*w), int(y*h)), (int((x+bw)*w), int((y+bh)*h)),
-                     (0, 255, 0), 2)
-        
-        x, y, bw, bh = pred_box
-        cv2.rectangle(img, (int(x*w), int(y*h)), (int((x+bw)*w), int((y+bh)*h)),
-                     (255, 0, 0), 2)
-        
-        iou = calculate_iou(pred_box, true_box)
-        
-        axes[i].imshow(img)
-        axes[i].set_title(f'IoU: {iou:.3f}', fontsize=12)
-        axes[i].axis('off')
-        axes[i].text(10, 20, 'Green: GT', color='green', fontsize=10,
-                    bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
-        axes[i].text(10, 40, 'Red: Pred', color='red', fontsize=10,
-                    bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
-    
-    plt.tight_layout()
-    plt.savefig('predictions_visualization.png', dpi=150, bbox_inches='tight')
-    print("Predictions saved as 'predictions_visualization.png'")
-    plt.show()
+        df = pd.read_csv(results_path)
+        df.columns = df.columns.str.strip()  
+        fig, axes = plt.subplots(2, 2, figsize=(14, 10))
+        axes[0, 0].plot(df['epoch'], df['train/box_loss'], label='Train', linewidth=2)
+        axes[0, 0].plot(df['epoch'], df['val/box_loss'], label='Val', linewidth=2)
+        axes[0, 0].set_xlabel('Epoch')
+        axes[0, 0].set_ylabel('Box Loss')
+        axes[0, 0].set_title('Bounding Box Loss')
+        axes[0, 0].legend()
+        axes[0, 0].grid(alpha=0.3)
+        axes[0, 1].plot(df['epoch'], df['metrics/mAP50(B)'], label='mAP50', linewidth=2)
+        axes[0, 1].plot(df['epoch'], df['metrics/mAP50-95(B)'], label='mAP50-95', linewidth=2)
+        axes[0, 1].set_xlabel('Epoch')
+        axes[0, 1].set_ylabel('mAP')
+        axes[0, 1].set_title('Mean Average Precision')
+        axes[0, 1].legend()
+        axes[0, 1].grid(alpha=0.3)
+        axes[1, 0].plot(df['epoch'], df['metrics/precision(B)'], label='Precision', linewidth=2)
+        axes[1, 0].plot(df['epoch'], df['metrics/recall(B)'], label='Recall', linewidth=2)
+        axes[1, 0].set_xlabel('Epoch')
+        axes[1, 0].set_ylabel('Score')
+        axes[1, 0].set_title('Precision & Recall')
+        axes[1, 0].legend()
+        axes[1, 0].grid(alpha=0.3)
+        axes[1, 1].plot(df['epoch'], df['train/box_loss'], label='Box Loss', linewidth=2)
+        axes[1, 1].plot(df['epoch'], df['train/cls_loss'], label='Cls Loss', linewidth=2)
+        axes[1, 1].plot(df['epoch'], df['train/dfl_loss'], label='DFL Loss', linewidth=2)
+        axes[1, 1].set_xlabel('Epoch')
+        axes[1, 1].set_ylabel('Loss')
+        axes[1, 1].set_title('Training Losses')
+        axes[1, 1].legend()
+        axes[1, 1].grid(alpha=0.3)
+        plt.tight_layout()
+        plt.savefig('training_curves.png', dpi=150, bbox_inches='tight')
+        print("Saved: training_curves.png")
+        plt.show()
+    def predict(self, image_path, conf=0.25, save=True):
+        results = self.model.predict(source=image_path, conf=conf, save=save, verbose=False)
+        return results
 
-
-def draw_bounding_box(image, bbox, color=(0, 255, 0), thickness=3):
-    h, w = image.shape[:2]
-    x, y, box_w, box_h = bbox
-    
-    x1 = int(x * w)
-    y1 = int(y * h)
-    x2 = int((x + box_w) * w)
-    y2 = int((y + box_h) * h)
-    
-    cv2.rectangle(image, (x1, y1), (x2, y2), color, thickness)
-    
-    label_size = cv2.getTextSize('License Plate', cv2.FONT_HERSHEY_SIMPLEX, 0.7, 2)[0]
-    cv2.rectangle(image, (x1, y1 - label_size[1] - 10), 
-                 (x1 + label_size[0], y1), color, -1)
-    cv2.putText(image, 'License Plate', (x1, y1 - 5),
-               cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
-    
-    return image
-
-
-def predict_image(model, image_path):
-    print(f"\nProcessing: {image_path}")
-    
-    img = cv2.imread(image_path)
-    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-    original = img.copy()
-    
-    img_resized = cv2.resize(img, (224, 224))
-    img_normalized = img_resized.astype('float32') / 255.0
-    
-    prediction = model.predict(np.expand_dims(img_normalized, axis=0), verbose=0)[0]
-    
-    result = draw_bounding_box(original, prediction)
-    
-    plt.figure(figsize=(12, 5))
-    plt.subplot(1, 2, 1)
-    plt.imshow(original)
-    plt.title('Original Image')
-    plt.axis('off')
-    
-    plt.subplot(1, 2, 2)
-    plt.imshow(result)
-    plt.title('Detected License Plate')
-    plt.axis('off')
-    plt.show()
-    
-    print(f"Predicted Bounding Box:")
-    print(f"  x: {prediction[0]:.4f}")
-    print(f"  y: {prediction[1]:.4f}")
-    print(f"  width: {prediction[2]:.4f}")
-    print(f"  height: {prediction[3]:.4f}")
-    
-    return prediction
-
-
-def create_demo_image(output_path='demo_input.jpg'):
-    print(f"\nCreating demo image: {output_path}")
-    
-    img = np.random.randint(80, 150, (480, 640, 3), dtype=np.uint8)
-    
-    cv2.rectangle(img, (100, 150), (540, 400), (100, 120, 140), -1)
-    cv2.rectangle(img, (150, 200), (250, 350), (60, 70, 80), -1)
-    cv2.rectangle(img, (390, 200), (490, 350), (60, 70, 80), -1)
-    
-    plate_x, plate_y = 250, 320
-    plate_w, plate_h = 140, 40
-    cv2.rectangle(img, (plate_x, plate_y), 
-                 (plate_x + plate_w, plate_y + plate_h), (230, 230, 230), -1)
-    cv2.rectangle(img, (plate_x, plate_y), 
-                 (plate_x + plate_w, plate_y + plate_h), (0, 0, 0), 2)
-    cv2.putText(img, '29A-12345', (plate_x + 15, plate_y + 28),
-               cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 2)
-    
-    cv2.imwrite(output_path, cv2.cvtColor(img, cv2.COLOR_RGB2BGR))
-    print(f"Demo image created: {output_path}")
-    
-    return output_path
+    def load_model(self, model_path):
+        self.model = YOLO(model_path)
 
 
 def main():
-    print("=" * 70)
-    print("VEHICLE LICENSE PLATE LOCALIZATION")
-    print("=" * 70)
+    detector = YOLOLicensePlateDetector(model_size='n')
     
-    detector = LicensePlateDetector()
-    detector.build_model()
+    synthetic_yaml = detector.create_synthetic_dataset(num_images=300)
     
-    X, y = detector.create_dataset(num_samples=1000)
+    images_folder = input("Images folder (default: my_images): ").strip()
+    if not images_folder:
+        images_folder = 'my_images'
     
-    split_train = int(0.7 * len(X))
-    split_val = int(0.85 * len(X))
+    custom_yaml = detector.prepare_custom_images(images_folder)
     
-    X_train, y_train = X[:split_train], y[:split_train]
-    X_val, y_val = X[split_train:split_val], y[split_train:split_val]
-    X_test, y_test = X[split_val:], y[split_val:]
+    if custom_yaml:
+        data_yaml = detector.combine_datasets(custom_yaml, synthetic_yaml)
+    else:
+        data_yaml = synthetic_yaml
     
-    print(f"\nDataset split:")
-    print(f"  Train: {len(X_train)} samples")
-    print(f"  Val: {len(X_val)} samples")
-    print(f"  Test: {len(X_test)} samples")
+    detector.train(data_yaml=data_yaml, epochs=50, batch=16)
+    metrics = detector.validate()
     
-    history = detector.train(X_train, y_train, X_val, y_val, epochs=30, batch_size=32)
-    
-    detector.plot_history(history)
-    
-    mean_iou, ious = evaluate_model(detector.model, X_test, y_test)
-    
-    visualize_predictions(detector.model, X_test, y_test)
-    
-    detector.save_model('models/final_model.h5')
-    
-    demo_img = create_demo_image()
-    predict_image(detector.model, demo_img)
-    
-    print("\n" + "=" * 70)
-    print("TRAINING COMPLETED SUCCESSFULLY!")
-    print("=" * 70)
-    print(f"\nFinal Results:")
-    print(f"  Mean IoU: {mean_iou:.4f}")
-    print(f"  Best Val Loss: {min(history.history['val_loss']):.6f}")
+    print(f"\nModel saved: runs/detect/license_plate_detector/weights/best.pt")
+    return detector
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        detector = main()
+        print("Done")
+    except Exception as e:
+        print(f"Error: {e}")
