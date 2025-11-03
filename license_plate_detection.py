@@ -5,7 +5,7 @@ import os
 import yaml
 from pathlib import Path
 import shutil
-import random  
+import random 
 
 class YOLOLicensePlateDetector:
     def __init__(self, model_size='n'):
@@ -230,18 +230,33 @@ class YOLOLicensePlateDetector:
         metrics = self.model.val(verbose=False)
         print(f"\nmAP50: {metrics.box.map50:.4f}")
         return metrics
-     
+    
     def visualize_results(self, test_images_folder='my_images', num_samples=6):
         import matplotlib.pyplot as plt
         images_path = Path(test_images_folder)
-        image_files = list(images_path.glob('*.jpg'))[:num_samples]
+        all_image_files = list(images_path.glob('*.jpg')) + list(images_path.glob('*.png'))
         
+        if len(all_image_files) > num_samples:
+            image_files = random.sample(all_image_files, num_samples)
+        else:
+            image_files = all_image_files
+            
         if not image_files:
-            print("No images found for visualization")
+            print(f"No images found in {test_images_folder}")
             return
         
-        fig, axes = plt.subplots(2, 3, figsize=(15, 10))
-        axes = axes.flatten()
+        if num_samples <= 3:
+            cols = num_samples
+            rows = 1
+        else:
+            cols = 3
+            rows = int(np.ceil(num_samples / cols))
+            
+        fig, axes = plt.subplots(rows, cols, figsize=(15, 5 * rows))
+        if num_samples == 1:
+            axes = [axes]
+        else:
+            axes = axes.flatten()
         
         for idx, img_file in enumerate(image_files):
             results = self.model.predict(str(img_file), conf=0.25, verbose=False)
@@ -263,9 +278,12 @@ class YOLOLicensePlateDetector:
             axes[idx].set_title(f'{img_file.name}', fontsize=10)
             axes[idx].axis('off')
         
+        for idx in range(len(image_files), len(axes)):
+            axes[idx].axis('off')
+            
         plt.tight_layout()
         plt.savefig('prediction_results.png', dpi=150, bbox_inches='tight')
-        print("Saved: prediction_results.png")
+        print("Saved results image: prediction_results.png")
         plt.show()
     
     def plot_training_curves(self):
@@ -274,12 +292,15 @@ class YOLOLicensePlateDetector:
         
         results_path = Path('runs/detect/license_plate_detector/results.csv')
         if not results_path.exists():
-            print("No training results found")
+            print("results.csv not found (maybe still training).")
             return
         
         df = pd.read_csv(results_path)
-        df.columns = df.columns.str.strip()  
+        df.columns = df.columns.str.strip()
+        
         fig, axes = plt.subplots(2, 2, figsize=(14, 10))
+        fig.suptitle('Training Process Curves', fontsize=16)
+        
         axes[0, 0].plot(df['epoch'], df['train/box_loss'], label='Train', linewidth=2)
         axes[0, 0].plot(df['epoch'], df['val/box_loss'], label='Val', linewidth=2)
         axes[0, 0].set_xlabel('Epoch')
@@ -287,13 +308,15 @@ class YOLOLicensePlateDetector:
         axes[0, 0].set_title('Bounding Box Loss')
         axes[0, 0].legend()
         axes[0, 0].grid(alpha=0.3)
+        
         axes[0, 1].plot(df['epoch'], df['metrics/mAP50(B)'], label='mAP50', linewidth=2)
         axes[0, 1].plot(df['epoch'], df['metrics/mAP50-95(B)'], label='mAP50-95', linewidth=2)
         axes[0, 1].set_xlabel('Epoch')
         axes[0, 1].set_ylabel('mAP')
-        axes[0, 1].set_title('Mean Average Precision')
+        axes[0, 1].set_title('Mean Average Precision (mAP)')
         axes[0, 1].legend()
         axes[0, 1].grid(alpha=0.3)
+        
         axes[1, 0].plot(df['epoch'], df['metrics/precision(B)'], label='Precision', linewidth=2)
         axes[1, 0].plot(df['epoch'], df['metrics/recall(B)'], label='Recall', linewidth=2)
         axes[1, 0].set_xlabel('Epoch')
@@ -301,18 +324,21 @@ class YOLOLicensePlateDetector:
         axes[1, 0].set_title('Precision & Recall')
         axes[1, 0].legend()
         axes[1, 0].grid(alpha=0.3)
+        
         axes[1, 1].plot(df['epoch'], df['train/box_loss'], label='Box Loss', linewidth=2)
         axes[1, 1].plot(df['epoch'], df['train/cls_loss'], label='Cls Loss', linewidth=2)
         axes[1, 1].plot(df['epoch'], df['train/dfl_loss'], label='DFL Loss', linewidth=2)
         axes[1, 1].set_xlabel('Epoch')
         axes[1, 1].set_ylabel('Loss')
-        axes[1, 1].set_title('Training Losses')
+        axes[1, 1].set_title('Training Losses (Train Set)')
         axes[1, 1].legend()
         axes[1, 1].grid(alpha=0.3)
-        plt.tight_layout()
+        
+        plt.tight_layout(rect=[0, 0.03, 1, 0.95])
         plt.savefig('training_curves.png', dpi=150, bbox_inches='tight')
-        print("Saved: training_curves.png")
+        print("Saved curves image: training_curves.png")
         plt.show()
+
     def predict(self, image_path, conf=0.25, save=True):
         results = self.model.predict(source=image_path, conf=conf, save=save, verbose=False)
         return results
@@ -339,6 +365,18 @@ def main():
     
     detector.train(data_yaml=data_yaml, epochs=50, batch=16)
     metrics = detector.validate()
+    
+    try:
+        print("\n--- Plotting training curves ---")
+        detector.plot_training_curves()
+    except Exception as e:
+        print(f"Error plotting training curves: {e}")
+        
+    try:
+        print("\n--- Visualizing prediction results ---")
+        detector.visualize_results(test_images_folder=images_folder, num_samples=6)
+    except Exception as e:
+        print(f"Error visualizing results: {e}")
     
     print(f"\nModel saved: runs/detect/license_plate_detector/weights/best.pt")
     return detector
