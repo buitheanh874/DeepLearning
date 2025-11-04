@@ -2,8 +2,7 @@ import os
 from ultralytics import YOLO
 
 # --- Configuration ---
-# This path is derived from license_plate_detection.py,
-# which prints "Model saved: runs/detect/license_plate_detector/weights/best.pt"
+# This path is derived from license_plate_detection.py
 MODEL_PATH = 'best.pt'
 
 # Confidence threshold for detection
