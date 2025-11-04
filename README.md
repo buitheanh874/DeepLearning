@@ -31,7 +31,7 @@ pip install -r requirements.txt
 ```bash
 python license_plate_detection.py
 ```
-Enter: `my_images` → Wait for a super long time ( my cheap pc with i3-8100 CPU 16gb ram took about like 1-1,5 hours)
+Enter: `my_images` → Wait for a super long time ( my cheap pc with i3-8100 CPU 16gb ram took about like 1-1,5 hours)  ->> solution : run on google colab
 
 **Project Structure:**
 ```
