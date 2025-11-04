@@ -217,7 +217,7 @@ class YOLOLicensePlateDetector:
             translate=0.1,
             scale=0.5,
             shear=0.0,
-            perspective=0.0,
+            perspective=0.001,
             flipud=0.0,
             fliplr=0.5,
             mosaic=1.0,
