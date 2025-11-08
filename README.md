@@ -8,24 +8,48 @@ AI model to detect license plates in images using YOLOv8.( just detect license p
 - **image process time < 1s**
 - **able to deal with variable light conditions**
   
-  ```mermaid
+```mermaid
 erDiagram
-    ScanLog {
-        int scan_id PK "Primary Key"
-        string image_name "File name of the scanned image"
-        datetime scanned_at "Timestamp of the scan"
+    YOLODetector {
+        string model_size
+        string device
+        float mAP
     }
 
-    DetectedPlate {
-        int plate_id PK "Primary Key"
-        int scan_id FK "Foreign Key to ScanLog"
-        float confidence "Confidence score (e.g., 0.95)"
-        string coordinates "Bounding box (e.g., [x, y, w, h])"
+    Dataset {
+        string path
+        int num_images
+        list train_images
+        list val_images
     }
 
-    ScanLog ||--|{ DetectedPlate : "has"
+    Label {
+        string class_name
+        float x_center
+        float y_center
+        float width
+        float height
+    }
 
-  ```
+    Training {
+        int epochs
+        int batch_size
+        float loss
+        float accuracy
+    }
+
+    Result {
+        int image_id
+        list boxes
+        list confidence
+    }
+
+    YOLODetector ||--|| Dataset : "uses"
+    Dataset ||--o{ Label : "has"
+    YOLODetector ||--|| Training : "trains"
+    YOLODetector ||--o{ Result : "produces"
+
+```
 
 
 ## Technologies Used
