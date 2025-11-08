@@ -7,14 +7,36 @@ AI model to detect license plates in images using YOLOv8.( just detect license p
 - **the accuracy:** mAP > 90%
 - **image process time < 1s**
 - **able to deal with variable light conditions**
+
+  ```mermaid
+erDiagram
+    Image {
+        int image_id PK
+        string file_path
+        date date_added
+        string source
+    }
+
+    Label {
+        int label_id PK
+        float x_center
+        float y_center
+        float width
+        float height
+        string class_name
+    }
+
+    Image ||--o{ Label : "contains"
+```
+
 ## Technologies Used
 -   **Programming Language:** Python
 -   **Image Processing Library:** OpenCV
 -   **Deep Learning Library:** PyTorch, Ultralytics
 -   **Algorithms:** YOLOv8, CNN
 
-## Requirement Specification
--  
+
+
 ## Installation and Usage
 
 **Clone the repository:**
