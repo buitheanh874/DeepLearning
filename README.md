@@ -26,7 +26,7 @@ erDiagram
     }
 
     Image ||--o{ Label : "contains"
-```
+``````
 
 ## Technologies Used
 -   **Programming Language:** Python
